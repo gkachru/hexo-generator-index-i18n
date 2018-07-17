@@ -11,9 +11,28 @@ const path = require('path');
  * @param {Object} config Hexo config
  * @returns {Object[]} Array of translated and paginated index pages
  */
-function getIndexPages(baseUrl, lang, posts, config) {
+function getIndexPages(baseUrl, lang, posts, config, defaultLanguage) {
   const paginationDir = config.pagination_dir || 'page';
-  const translatedPosts = posts.filter(post => post.lang === lang);
+
+  const translatedPosts = posts.filter(function (post) {
+    if (post.lang === lang) return true;
+
+    // Is this a post in the default language?
+    if ((post.lang === defaultLanguage) || (post.lang == undefined) || (post.lang === '')) {
+
+      // If there is no label, then include it
+      if ((post.label === '') || (post.label === undefined)) return true;
+
+      // Does it have a translation?
+      const foundAltPost = posts.find(function(p) {
+                              return (p.label === post.label) && (p.lang === lang);
+                            });
+      // Include it if there is no translation
+      if (foundAltPost === undefined) return true;
+    }
+
+    return false;
+  });
 
   return pagination(baseUrl, translatedPosts, {
     perPage: config.index_generator.per_page,
@@ -37,13 +56,14 @@ hexo.extend.generator.register('index-i18n', function indexI18nGenerator(locals)
   const indexPath = config.index_generator.path || '';
   const languages = [].concat(config.language || [])
     .filter(lang => lang !== 'default');
-  const defaultLanguage = languages[0];
+  const defaultLanguage = languages.shift();
+
   let indexPages = [].concat.apply([],
-    languages.map(lang => getIndexPages(path.join(lang, indexPath), lang, posts, config))
+    languages.map(lang => getIndexPages(path.join(lang, indexPath), lang, posts, config, defaultLanguage))
   );
 
-  if (config.index_generator.single_language_index && defaultLanguage) {
-    indexPages = indexPages.concat(getIndexPages(indexPath, defaultLanguage, posts, config));
+  if (defaultLanguage) {
+    indexPages = indexPages.concat(getIndexPages(indexPath, defaultLanguage, posts, config, defaultLanguage));
   }
 
   return indexPages;
